@@ -1,4 +1,15 @@
 const https = require('https');
+const { Pool } = require('pg');
+require('dotenv').config();
+
+const dbPool = new Pool({
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: parseInt(process.env.DB_PORT, 10),
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+});
 
 // Función para extraer los datos necesarios de los estimates
 function extraerDatosBasicos(leads) {
@@ -75,6 +86,112 @@ async function fetchAllEstimates(apiKey, fechaInicio, fechaFin) {
   return allLeads;
 }
 
+// --- NUEVO ENDPOINT PARA SINCRONIZAR Y GUARDAR EN LA BASE ---
+exports.syncEstimates = async (req, res) => {
+  const { apiKey } = req.body;
+  // Calcular fechas: últimas 2 semanas
+  const fechaFin = new Date();
+  const fechaInicio = new Date();
+  fechaInicio.setDate(fechaInicio.getDate() - 14);
+  const fechaFinStr = fechaFin.toISOString().slice(0, 10);
+  const fechaInicioStr = fechaInicio.toISOString().slice(0, 10);
+
+  if (!apiKey) {
+    return res.status(400).json({ error: 'API Key requerida' });
+  }
+
+  const client = await dbPool.connect();
+  let inserted = 0, updated = 0, salesPersons = 0, branches = 0, statuses = 0;
+  let errors = [];
+  try {
+    console.log('--- INICIANDO SYNC ESTIMATES ---');
+    const allLeads = await fetchAllEstimates(apiKey, fechaInicioStr, fechaFinStr);
+    const estimates = extraerDatosBasicos(allLeads);
+    console.log(`Estimates a procesar: ${estimates.length}`);
+    await client.query('BEGIN');
+    const spMap = new Map();
+    const branchMap = new Map();
+    const statusMap = new Map();
+    const spRows = await client.query('SELECT id, name FROM salesperson');
+    spRows.rows.forEach(r => spMap.set(r.name, r.id));
+    const brRows = await client.query('SELECT id, name FROM branch');
+    brRows.rows.forEach(r => branchMap.set(r.name, r.id));
+    const stRows = await client.query('SELECT id, name FROM status');
+    stRows.rows.forEach(r => statusMap.set(r.name, r.id));
+    for (const est of estimates) {
+      let spId = null;
+      if (est.sales_person) {
+        if (!spMap.has(est.sales_person)) {
+          const spRes = await client.query('INSERT INTO salesperson (name) VALUES ($1) RETURNING id', [est.sales_person]);
+          spId = spRes.rows[0].id;
+          spMap.set(est.sales_person, spId);
+          salesPersons++;
+          console.log(`Nuevo salesperson: ${est.sales_person}`);
+        } else {
+          spId = spMap.get(est.sales_person);
+        }
+      }
+      let brId = null;
+      if (est.branch) {
+        if (!branchMap.has(est.branch)) {
+          const brRes = await client.query('INSERT INTO branch (name) VALUES ($1) RETURNING id', [est.branch]);
+          brId = brRes.rows[0].id;
+          branchMap.set(est.branch, brId);
+          branches++;
+          console.log(`Nuevo branch: ${est.branch}`);
+        } else {
+          brId = branchMap.get(est.branch);
+        }
+      }
+      let stId = null;
+      if (est.estado) {
+        if (!statusMap.has(est.estado)) {
+          const stRes = await client.query('INSERT INTO status (name) VALUES ($1) RETURNING id', [est.estado]);
+          stId = stRes.rows[0].id;
+          statusMap.set(est.estado, stId);
+          statuses++;
+          console.log(`Nuevo status: ${est.estado}`);
+        } else {
+          stId = statusMap.get(est.estado);
+        }
+      }
+      try {
+        const upRes = await client.query(
+          `INSERT INTO estimate (created_date, name, status_id, branch_id, salesperson_id)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (name, created_date) DO UPDATE SET status_id = EXCLUDED.status_id, branch_id = EXCLUDED.branch_id, salesperson_id = EXCLUDED.salesperson_id`,
+          [est.fecha_creacion, est.nombre, stId, brId, spId]
+        );
+        if (upRes.rowCount === 1) {
+          inserted++;
+          console.log(`Insertado: ${est.nombre}`);
+        } else {
+          updated++;
+          console.log(`Actualizado: ${est.nombre}`);
+        }
+      } catch (e) {
+        errors.push(`Estimate ${est.nombre}: ${e.message}`);
+        console.error(`Error con estimate ${est.nombre}: ${e.message}`);
+      }
+    }
+    await client.query('INSERT INTO update_log (message) VALUES ($1)', [
+      `Sync ejecutado: ${inserted} estimates insertados, ${updated} actualizados, ${salesPersons} salespersons nuevos, ${branches} branches nuevos, ${statuses} estados nuevos.`
+    ]);
+    await client.query('COMMIT');
+    console.log('--- SYNC FINALIZADO ---');
+    res.json({
+      inserted, updated, salesPersons, branches, statuses, total: estimates.length, errors
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error general en sync:', error.message);
+    res.status(500).json({ error: error.message, errors });
+  } finally {
+    client.release();
+  }
+};
+
+// Endpoint anterior para solo fetch (sin guardar)
 exports.fetchEstimates = async (req, res) => {
   const { apiKey, fechaInicio, fechaFin } = req.body;
 
@@ -88,5 +205,69 @@ exports.fetchEstimates = async (req, res) => {
     res.json(estimatesFiltrados);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+// Función ficticia para enviar mensajes por Telegram
+async function sendTelegram(telegramid, message) {
+  // Aquí deberías integrar con la API real de Telegram
+  console.log(`[TELEGRAM] Mensaje a ${telegramid}: ${message}`);
+}
+
+// Endpoint para enviar advertencias
+exports.sendWarnings = async (req, res) => {
+  const client = await dbPool.connect();
+  const managerTelegramId = 'MANAGER_TELEGRAM_ID'; // Replace with the real one or fetch from DB
+  try {
+    const salespersonsRes = await client.query('SELECT id, name, telegramid, warning_count FROM salesperson');
+    let warnings = [];
+    for (const sp of salespersonsRes.rows) {
+      const countRes = await client.query(
+        `SELECT COUNT(*) FROM estimate e
+         JOIN status st ON e.status_id = st.id
+         WHERE e.salesperson_id = $1 AND st.name IN ('In Progress', 'Released')`,
+        [sp.id]
+      );
+      const total_estimates = parseInt(countRes.rows[0].count);
+      let warning_message = null;
+      let notify_manager = false;
+      let new_warning_count = sp.warning_count;
+      if (total_estimates > 12) {
+        new_warning_count++;
+        if (new_warning_count === 1) {
+          warning_message = `Warning: you have ${total_estimates} leads in 'In Progress' or 'Released' status.`;
+        } else if (new_warning_count === 2) {
+          warning_message = `Final warning: you have ${total_estimates} leads in 'In Progress' or 'Released' status. If you remain above 12 tomorrow, your manager will be notified.`;
+        } else if (new_warning_count >= 3) {
+          warning_message = `Critical warning: you have ${total_estimates} leads in 'In Progress' or 'Released' status. Your manager has been notified.`;
+          notify_manager = true;
+        }
+        await client.query('UPDATE salesperson SET warning_count = $1 WHERE id = $2', [new_warning_count, sp.id]);
+      } else {
+        if (sp.warning_count !== 0) {
+          await client.query('UPDATE salesperson SET warning_count = 0 WHERE id = $1', [sp.id]);
+        }
+        continue;
+      }
+      if (sp.telegramid && warning_message) {
+        await sendTelegram(sp.telegramid, warning_message);
+      }
+      if (notify_manager && managerTelegramId) {
+        await sendTelegram(managerTelegramId, `Salesperson ${sp.name} has received more than two warnings for having too many active leads.`);
+      }
+      warnings.push({
+        salesperson_name: sp.name,
+        telegram_id: sp.telegramid,
+        warning_message,
+        warning_count: new_warning_count,
+        notify_manager
+      });
+    }
+    res.json(warnings);
+  } catch (error) {
+    console.error('Error in sendWarnings:', error.message);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 }; 
