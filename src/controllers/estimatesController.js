@@ -270,4 +270,40 @@ exports.sendWarnings = async (req, res) => {
   } finally {
     client.release();
   }
+};
+
+exports.registerTelegram = async (req, res) => {
+  const { telegram_id, salesperson_name } = req.body;
+  const client = await dbPool.connect();
+  try {
+    if (!salesperson_name || !telegram_id) {
+      return res.status(400).json({ error: 'Both salesperson_name and telegram_id are required.' });
+    }
+    // Buscar salesperson por nombre (case insensitive)
+    const spRes = await client.query('SELECT id, name, telegramid FROM salesperson WHERE LOWER(name) = LOWER($1)', [salesperson_name]);
+    if (spRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Salesperson not found.' });
+    }
+    const sp = spRes.rows[0];
+    await client.query('UPDATE salesperson SET telegramid = $1 WHERE id = $2', [telegram_id, sp.id]);
+    res.json({ message: `Telegram ID registered for ${sp.name}.` });
+  } catch (error) {
+    console.error('Error in registerTelegram:', error.message);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+};
+
+exports.getSalespersonsList = async (req, res) => {
+  const client = await dbPool.connect();
+  try {
+    const all = await client.query('SELECT id, name FROM salesperson ORDER BY name');
+    res.json(all.rows);
+  } catch (error) {
+    console.error('Error in getSalespersonsList:', error.message);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
 }; 
