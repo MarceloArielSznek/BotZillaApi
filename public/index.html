@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sync Estimates</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1em; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f4f4f4; }
+    #syncBtn { padding: 0.5em 1em; font-size: 1em; }
+    #apiKey { width: 300px; padding: 0.5em; }
+  </style>
+</head>
+<body>
+  <h1>Sincronizar Estimates</h1>
+  <label for="apiKey">API Key:</label>
+  <input type="password" id="apiKey" placeholder="Introduce tu API Key" />
+  <label for="fechaInicio">Desde:</label>
+  <input type="date" id="fechaInicio" />
+  <label for="fechaFin">Hasta:</label>
+  <input type="date" id="fechaFin" />
+  <button id="syncBtn">Sync</button>
+  <br><br>
+  <label for="salesPersonFilter">Filtrar por Sales Person:</label>
+  <select id="salesPersonFilter"><option value="">Todos</option></select>
+  <label for="branchFilter">Filtrar por Branch:</label>
+  <select id="branchFilter"><option value="">Todos</option></select>
+  <div id="error" style="color: red; margin-top: 1em;"></div>
+  <div id="warning" style="color: orange; margin-top: 1em;"></div>
+  <div id="metrics" style="margin-top: 1em;"></div>
+  <table id="resultsTable" style="display:none;">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Branch</th>
+        <th>Fecha de Creación</th>
+        <th>Estado</th>
+        <th>Sales Person</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <script>
+    let allData = [];
+    document.getElementById('syncBtn').onclick = async function() {
+      const apiKey = document.getElementById('apiKey').value;
+      const fechaInicio = document.getElementById('fechaInicio').value;
+      const fechaFin = document.getElementById('fechaFin').value;
+      const warningDiv = document.getElementById('warning');
+      warningDiv.textContent = '';
+      if (!apiKey) {
+        errorDiv.textContent = 'Por favor, ingresa tu API Key.';
+        return;
+      }
+      if (fechaInicio && fechaFin) {
+        const d1 = new Date(fechaInicio);
+        const d2 = new Date(fechaFin);
+        const diff = (d2 - d1) / (1000 * 60 * 60 * 24);
+        if (diff > 31) {
+          warningDiv.textContent = '¡Atención! El rango de fechas es mayor a 31 días. La consulta puede demorar varios minutos.';
+        }
+      }
+      try {
+        const res = await fetch('/api/fetch-estimates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey, fechaInicio, fechaFin })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errorDiv.textContent = data.error || 'Error desconocido al sincronizar.';
+          document.getElementById('resultsTable').style.display = 'none';
+          return;
+        }
+        allData = data;
+        fillFilters(data);
+        renderTable();
+        renderMetrics();
+      } catch (err) {
+        errorDiv.textContent = 'Error de red o del servidor.';
+        document.getElementById('resultsTable').style.display = 'none';
+      }
+    };
+
+    function fillFilters(data) {
+      const salesPersons = Array.from(new Set(data.map(e => e.sales_person).filter(Boolean)));
+      const branches = Array.from(new Set(data.map(e => e.branch).filter(Boolean)));
+      const salesPersonSelect = document.getElementById('salesPersonFilter');
+      const branchSelect = document.getElementById('branchFilter');
+      salesPersonSelect.innerHTML = '<option value="">Todos</option>' + salesPersons.map(sp => `<option value="${sp}">${sp}</option>`).join('');
+      branchSelect.innerHTML = '<option value="">Todos</option>' + branches.map(b => `<option value="${b}">${b}</option>`).join('');
+    }
+
+    document.getElementById('salesPersonFilter').onchange = renderTable;
+    document.getElementById('branchFilter').onchange = renderTable;
+
+    function renderTable() {
+      const salesPerson = document.getElementById('salesPersonFilter').value;
+      const branch = document.getElementById('branchFilter').value;
+      const tbody = document.querySelector('#resultsTable tbody');
+      tbody.innerHTML = '';
+      let filtered = allData;
+      if (salesPerson) filtered = filtered.filter(e => e.sales_person === salesPerson);
+      if (branch) filtered = filtered.filter(e => e.branch === branch);
+      filtered.forEach(est => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${est.nombre}</td><td>${est.branch}</td><td>${est.fecha_creacion}</td><td>${est.estado}</td><td>${est.sales_person || ''}</td>`;
+        tbody.appendChild(tr);
+      });
+      document.getElementById('resultsTable').style.display = filtered.length ? '' : 'none';
+      renderMetrics(filtered);
+    }
+
+    function renderMetrics(filtered = allData) {
+      // Métricas por estado
+      const byEstado = {};
+      filtered.forEach(e => { byEstado[e.estado] = (byEstado[e.estado] || 0) + 1; });
+      // Métricas por sales person
+      const bySales = {};
+      filtered.forEach(e => { bySales[e.sales_person] = (bySales[e.sales_person] || 0) + 1; });
+      let html = '<b>Métricas:</b><br><ul>';
+      html += '<li><b>Por Estado:</b> ' + Object.entries(byEstado).map(([k,v]) => `${k}: ${v}`).join(', ') + '</li>';
+      html += '<li><b>Por Sales Person:</b> ' + Object.entries(bySales).map(([k,v]) => `${k}: ${v}`).join(', ') + '</li>';
+      html += `<li><b>Total de leads:</b> ${filtered.length}</li>`;
+      html += '</ul>';
+      document.getElementById('metrics').innerHTML = html;
+    }
+  </script>
+</body>
+</html> 
