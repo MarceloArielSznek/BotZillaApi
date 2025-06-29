@@ -306,4 +306,21 @@ exports.getSalespersonsList = async (req, res) => {
   } finally {
     client.release();
   }
+};
+
+exports.checkTelegram = async (req, res) => {
+  const { telegram_id } = req.body;
+  if (!telegram_id) {
+    return res.status(400).json({ error: 'telegram_id is required.' });
+  }
+  const client = await dbPool.connect();
+  try {
+    const result = await client.query('SELECT 1 FROM salesperson WHERE telegramid = $1 LIMIT 1', [telegram_id]);
+    res.json({ exists: result.rows.length > 0 });
+  } catch (error) {
+    console.error('Error in checkTelegram:', error.message);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
 }; 
