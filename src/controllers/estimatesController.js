@@ -298,7 +298,7 @@ exports.registerTelegram = async (req, res) => {
 exports.getSalespersonsList = async (req, res) => {
   const client = await dbPool.connect();
   try {
-    const all = await client.query('SELECT id, name, telegramid FROM salesperson ORDER BY name');
+    const all = await client.query('SELECT id, name FROM salesperson ORDER BY id');
     res.json(all.rows);
   } catch (error) {
     console.error('Error in getSalespersonsList:', error.message);
