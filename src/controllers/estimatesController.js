@@ -273,14 +273,14 @@ exports.sendWarnings = async (req, res) => {
 };
 
 exports.registerTelegram = async (req, res) => {
-  const { telegram_id, salesperson_name } = req.body;
+  const { telegram_id, salesperson_id } = req.body;
   const client = await dbPool.connect();
   try {
-    if (!salesperson_name || !telegram_id) {
-      return res.status(400).json({ error: 'Both salesperson_name and telegram_id are required.' });
+    if (!salesperson_id || !telegram_id) {
+      return res.status(400).json({ error: 'Both salesperson_id and telegram_id are required.' });
     }
-    // Buscar salesperson por nombre (case insensitive)
-    const spRes = await client.query('SELECT id, name, telegramid FROM salesperson WHERE LOWER(name) = LOWER($1)', [salesperson_name]);
+    // Find salesperson by id
+    const spRes = await client.query('SELECT id, name, telegramid FROM salesperson WHERE id = $1', [salesperson_id]);
     if (spRes.rows.length === 0) {
       return res.status(404).json({ error: 'Salesperson not found.' });
     }
