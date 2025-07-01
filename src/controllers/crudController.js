@@ -162,4 +162,23 @@ exports.getSalespersonsWithActiveJobs = async (req, res) => {
     ORDER BY s.id
   `);
   res.json(result);
+};
+
+// --- SALESPERSONS WITH >3 WARNINGS FOR MANAGER ---
+exports.getSalespersonsWithWarningsForManager = async (req, res) => {
+  const result = await queryDb(`
+    SELECT s.id, s.name, s.warning_count, b.name AS branch_name,
+      (
+        SELECT COUNT(*) 
+        FROM estimate e
+        JOIN status st ON e.status_id = st.id
+        WHERE e.salesperson_id = s.id
+          AND st.name IN ('In Progress', 'Released')
+      ) AS active_jobs
+    FROM salesperson s
+    LEFT JOIN branch b ON s.branch_id = b.id
+    WHERE s.warning_count > 3
+    ORDER BY s.warning_count DESC, s.name
+  `);
+  res.json(result);
 }; 

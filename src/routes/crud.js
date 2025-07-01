@@ -5,6 +5,7 @@ const crud = require('../controllers/crudController');
 // Salespersons
 router.get('/salesperson', crud.getAllSalespersons);
 router.get('/salesperson/with-active-jobs', crud.getSalespersonsWithActiveJobs);
+router.get('/salesperson/warnings-manager', crud.getSalespersonsWithWarningsForManager);
 router.get('/salesperson/:id', crud.getSalesperson);
 router.post('/salesperson', crud.createSalesperson);
 router.put('/salesperson/:id', crud.updateSalesperson);
