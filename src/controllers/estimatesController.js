@@ -94,12 +94,9 @@ function logWithTimestamp(message) {
 exports.syncEstimates = async (req, res) => {
   const { apiKey } = req.body;
   logWithTimestamp('syncEstimates called');
-  // Calcular fechas: últimas 2 semanas
-  const fechaFin = new Date();
-  const fechaInicio = new Date();
-  fechaInicio.setDate(fechaInicio.getDate() - 14);
-  const fechaFinStr = fechaFin.toISOString().slice(0, 10);
-  const fechaInicioStr = fechaInicio.toISOString().slice(0, 10);
+  // Hardcodear fecha de inicio del sync a 2024-06-15
+  const fechaInicioStr = '2024-06-15';
+  const fechaFinStr = new Date().toISOString().slice(0, 10); // hoy
 
   if (!apiKey) {
     return res.status(400).json({ error: 'API Key requerida' });
@@ -125,17 +122,6 @@ exports.syncEstimates = async (req, res) => {
     stRows.rows.forEach(r => statusMap.set(r.name, r.id));
     for (const est of estimates) {
       let spId = null;
-      if (est.sales_person) {
-        if (!spMap.has(est.sales_person)) {
-          const spRes = await client.query('INSERT INTO salesperson (name) VALUES ($1) RETURNING id', [est.sales_person]);
-          spId = spRes.rows[0].id;
-          spMap.set(est.sales_person, spId);
-          salesPersons++;
-          console.log(`Nuevo salesperson: ${est.sales_person}`);
-        } else {
-          spId = spMap.get(est.sales_person);
-        }
-      }
       let brId = null;
       if (est.branch) {
         if (!branchMap.has(est.branch)) {
@@ -146,6 +132,19 @@ exports.syncEstimates = async (req, res) => {
           console.log(`Nuevo branch: ${est.branch}`);
         } else {
           brId = branchMap.get(est.branch);
+        }
+      }
+      if (est.sales_person) {
+        if (!spMap.has(est.sales_person)) {
+          const spRes = await client.query('INSERT INTO salesperson (name, branch_id) VALUES ($1, $2) RETURNING id', [est.sales_person, brId]);
+          spId = spRes.rows[0].id;
+          spMap.set(est.sales_person, spId);
+          salesPersons++;
+          console.log(`Nuevo salesperson: ${est.sales_person}`);
+        } else {
+          spId = spMap.get(est.sales_person);
+          // Actualizar branch_id del salesperson existente
+          await client.query('UPDATE salesperson SET branch_id = $1 WHERE id = $2', [brId, spId]);
         }
       }
       let stId = null;
@@ -199,14 +198,20 @@ exports.syncEstimates = async (req, res) => {
 
 // Endpoint anterior para solo fetch (sin guardar)
 exports.fetchEstimates = async (req, res) => {
-  const { apiKey, fechaInicio, fechaFin } = req.body;
+  const { apiKey } = req.body;
+  // Calcular fechas: últimos 15 días
+  const fechaFin = new Date();
+  const fechaInicio = new Date();
+  fechaInicio.setDate(fechaInicio.getDate() - 15);
+  const fechaFinStr = fechaFin.toISOString().slice(0, 10);
+  const fechaInicioStr = fechaInicio.toISOString().slice(0, 10);
 
   if (!apiKey) {
     return res.status(400).json({ error: 'API Key requerida' });
   }
 
   try {
-    const allLeads = await fetchAllEstimates(apiKey, fechaInicio, fechaFin);
+    const allLeads = await fetchAllEstimates(apiKey, fechaInicioStr, fechaFinStr);
     const estimatesFiltrados = extraerDatosBasicos(allLeads);
     res.json(estimatesFiltrados);
   } catch (error) {
@@ -239,14 +244,15 @@ exports.sendWarnings = async (req, res) => {
       let warning_message = null;
       let notify_manager = false;
       let new_warning_count = sp.warning_count;
-      if (total_estimates > 12) {
+      if (total_estimates >= 12) {
         new_warning_count++;
         if (new_warning_count === 1) {
-          warning_message = `Warning: you have ${total_estimates} leads in 'In Progress' or 'Released' status.`;
+          warning_message = `Hey! Just a heads-up — you currently have ${total_estimates} leads in 'In Progress' or 'Released' status. Nothing serious yet, but try to keep it under 12 if possible. You're still good 😉`;
         } else if (new_warning_count === 2) {
-          warning_message = `Final warning: you have ${total_estimates} leads in 'In Progress' or 'Released' status. If you remain above 12 tomorrow, your manager will be notified.`;
+          warning_message = `Second friendly reminder 😅 You're still at ${total_estimates} active leads. I really don’t want to be a snitch… but I was literally programmed to warn you twice before taking it further 🤖`;
         } else if (new_warning_count >= 3) {
-          warning_message = `Critical warning: you have ${total_estimates} leads in 'In Progress' or 'Released' status. Your manager has been notified.`;
+          warning_message = `Okay... here we are 😬 You're still at ${total_estimates} leads in 'In Progress' or 'Released'. As part of the system rules, I now have to notify your manager.
+          This isn't personal — I send this to anyone who stays over the limit for multiple days. I’m just the messenger 🤖📩`;
           notify_manager = true;
         }
         await client.query('UPDATE salesperson SET warning_count = $1 WHERE id = $2', [new_warning_count, sp.id]);

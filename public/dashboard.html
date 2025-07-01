@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Botzilla Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background: #f8f9fa; }
+    .sidebar { min-width: 220px; max-width: 220px; background: #343a40; color: #fff; height: 100vh; position: fixed; }
+    .sidebar a { color: #fff; text-decoration: none; display: block; padding: 1em; }
+    .sidebar a.active, .sidebar a:hover { background: #495057; }
+    .main { margin-left: 230px; padding: 2em; }
+    .table-responsive { max-height: 60vh; overflow-y: auto; }
+    .log-box { background: #222; color: #0f0; font-size: 0.9em; padding: 1em; border-radius: 5px; height: 120px; overflow-y: auto; }
+    .action-btns button { margin-right: 0.3em; }
+  </style>
+</head>
+<body>
+  <div class="sidebar d-flex flex-column">
+    <h3 class="text-center py-3">Botzilla</h3>
+    <a href="#" class="active" id="nav-estimates">Estimates</a>
+    <a href="#" id="nav-salespersons">Salespersons</a>
+    <a href="#" id="nav-branches">Branches</a>
+    <a href="#" id="nav-statuses">Statuses</a>
+    <a href="#" id="nav-sync">Sync</a>
+    <a href="#" id="nav-warnings">Warnings</a>
+  </div>
+  <div class="main">
+    <div id="section-estimates">
+      <h2>Estimates</h2>
+      <div class="row mb-3">
+        <div class="col-md-2">
+          <label class="form-label">Branch</label>
+          <select class="form-select" id="filter-branch"><option value="">All</option></select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Salesperson</label>
+          <select class="form-select" id="filter-salesperson"><option value="">All</option></select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="filter-status"><option value="">All</option></select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">From</label>
+          <input type="date" class="form-control" id="filter-from">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">To</label>
+          <input type="date" class="form-control" id="filter-to">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <button class="btn btn-primary w-100" id="apply-estimates-filters"><i class="bi bi-funnel"></i> Filter</button>
+        </div>
+      </div>
+      <div id="estimates-spinner" class="text-center my-3" style="display:none;">
+        <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle" id="estimates-table">
+          <thead class="table-dark">
+            <tr>
+              <th>Name</th>
+              <th>Branch</th>
+              <th>Salesperson</th>
+              <th>Status</th>
+              <th>Created Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="d-flex justify-content-between align-items-center mt-2">
+        <div id="estimates-total"></div>
+        <div>
+          <button class="btn btn-outline-secondary btn-sm" id="estimates-prev">&lt; Prev</button>
+          <span id="estimates-page"></span>
+          <button class="btn btn-outline-secondary btn-sm" id="estimates-next">Next &gt;</button>
+        </div>
+      </div>
+    </div>
+    <div id="section-salespersons" style="display:none;">
+      <h2>Salespersons</h2>
+      <div class="row mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Branch</label>
+          <select class="form-select" id="filter-salesperson-branch"><option value="">All</option></select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Min. Warnings</label>
+          <input type="number" class="form-control" id="filter-salesperson-warnings" min="0" placeholder="0">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Min. Active Jobs</label>
+          <input type="number" class="form-control" id="filter-salesperson-activejobs" min="0" placeholder="0">
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button class="btn btn-primary w-100" id="apply-salesperson-filters"><i class="bi bi-funnel"></i> Filter</button>
+        </div>
+      </div>
+      <div class="mb-2"><button class="btn btn-success" id="add-salesperson-btn"><i class="bi bi-plus-circle"></i> Add Salesperson</button></div>
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle" id="salespersons-table">
+          <thead class="table-dark">
+            <tr><th>ID</th><th>Name</th><th>Telegram ID</th><th>Warning Count</th><th>Active Jobs</th><th>Actions</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="section-branches" style="display:none;">
+      <h2>Branches</h2>
+      <div class="mb-2"><button class="btn btn-success" id="add-branch-btn"><i class="bi bi-plus-circle"></i> Add Branch</button></div>
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle" id="branches-table">
+          <thead class="table-dark">
+            <tr><th>ID</th><th>Name</th><th>Actions</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="section-statuses" style="display:none;">
+      <h2>Statuses</h2>
+      <div class="mb-2"><button class="btn btn-success" id="add-status-btn"><i class="bi bi-plus-circle"></i> Add Status</button></div>
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle" id="statuses-table">
+          <thead class="table-dark">
+            <tr><th>ID</th><th>Name</th><th>Actions</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="section-sync" style="display:none;">
+      <h2>Sync Estimates</h2>
+      <button class="btn btn-primary" id="sync-btn">Run Sync</button>
+      <div class="log-box mt-3" id="sync-log"></div>
+    </div>
+    <div id="section-warnings" style="display:none;">
+      <h2>Send Warnings</h2>
+      <button class="btn btn-warning" id="warnings-btn">Send Warnings</button>
+      <div class="log-box mt-3" id="warnings-log"></div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Navegación
+    const sections = ['estimates', 'salespersons', 'branches', 'statuses', 'sync', 'warnings'];
+    sections.forEach(sec => {
+      document.getElementById('nav-' + sec).onclick = function() {
+        sections.forEach(s => document.getElementById('section-' + s).style.display = 'none');
+        document.getElementById('section-' + sec).style.display = '';
+        document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+        this.classList.add('active');
+        if (sec === 'estimates') loadEstimates();
+        if (sec === 'salespersons') loadSalespersons();
+        if (sec === 'branches') loadBranches();
+        if (sec === 'statuses') loadStatuses();
+      };
+    });
+
+    // Utilidades para mostrar mensajes
+    function showToast(msg, type = 'success') {
+      let toast = document.createElement('div');
+      toast.className = `toast align-items-center text-bg-${type} border-0 show position-fixed top-0 end-0 m-3`;
+      toast.style.zIndex = 9999;
+      toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3500);
+    }
+
+    // --- CRUD ESTIMATES ---
+    let estimatesPage = 1, estimatesLimit = 50, estimatesTotal = 0, estimatesData = [], estimatesBranches = [], estimatesSalespersons = [], estimatesStatuses = [];
+    async function loadEstimateFilters() {
+      // Cargar opciones para los dropdowns de filtros
+      [estimatesBranches, estimatesSalespersons, estimatesStatuses] = await Promise.all([
+        axios.get('/api/crud/branch').then(r => r.data),
+        axios.get('/api/crud/salesperson').then(r => r.data),
+        axios.get('/api/crud/status').then(r => r.data)
+      ]);
+      const branchSel = document.getElementById('filter-branch');
+      const salespersonSel = document.getElementById('filter-salesperson');
+      const statusSel = document.getElementById('filter-status');
+      branchSel.innerHTML = '<option value="">All</option>' + estimatesBranches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+      salespersonSel.innerHTML = '<option value="">All</option>' + estimatesSalespersons.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      statusSel.innerHTML = '<option value="">All</option>' + estimatesStatuses.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    }
+    async function loadEstimates() {
+      document.getElementById('estimates-spinner').style.display = '';
+      await loadEstimateFilters();
+      const res = await axios.get(`/api/crud/estimate/details?page=${estimatesPage}&limit=${estimatesLimit}`);
+      estimatesData = res.data.data;
+      estimatesTotal = res.data.total;
+      document.getElementById('estimates-spinner').style.display = 'none';
+      renderEstimatesTable();
+      renderEstimatesPagination();
+    }
+    function renderEstimatesTable() {
+      const tbody = document.querySelector('#estimates-table tbody');
+      tbody.innerHTML = '';
+      // Aplicar filtros en frontend
+      let filtered = estimatesData.filter(est => {
+        const branch = document.getElementById('filter-branch').value;
+        const salesperson = document.getElementById('filter-salesperson').value;
+        const status = document.getElementById('filter-status').value;
+        const from = document.getElementById('filter-from').value;
+        const to = document.getElementById('filter-to').value;
+        let ok = true;
+        if (branch && String(est.branch_id) !== branch) ok = false;
+        if (salesperson && String(est.salesperson_id) !== salesperson) ok = false;
+        if (status && String(est.status_id) !== status) ok = false;
+        if (from && (!est.created_date || est.created_date < from)) ok = false;
+        if (to && (!est.created_date || est.created_date > to)) ok = false;
+        return ok;
+      });
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No estimates found</td></tr>';
+        return;
+      }
+      filtered.forEach(est => {
+        tbody.innerHTML += `<tr>
+          <td>${est.name}</td>
+          <td>${est.branch_name || ''}</td>
+          <td>${est.salesperson_name || ''}</td>
+          <td>${est.status_name || ''}</td>
+          <td>${est.created_date ? est.created_date.split('T')[0] : ''}</td>
+          <td class='action-btns'>
+            <button class='btn btn-sm btn-primary' onclick='openEstimateModal(${est.id})'><i class="bi bi-pencil"></i></button>
+            <button class='btn btn-sm btn-danger' onclick='deleteEstimate(${est.id})'><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>`;
+      });
+    }
+    function renderEstimatesPagination() {
+      document.getElementById('estimates-total').textContent = `Total: ${estimatesTotal}`;
+      document.getElementById('estimates-page').textContent = `Page ${estimatesPage}`;
+      document.getElementById('estimates-prev').disabled = estimatesPage <= 1;
+      document.getElementById('estimates-next').disabled = estimatesPage * estimatesLimit >= estimatesTotal;
+    }
+    document.getElementById('estimates-prev').onclick = function() {
+      if (estimatesPage > 1) { estimatesPage--; loadEstimates(); }
+    };
+    document.getElementById('estimates-next').onclick = function() {
+      if (estimatesPage * estimatesLimit < estimatesTotal) { estimatesPage++; loadEstimates(); }
+    };
+    document.getElementById('apply-estimates-filters').onclick = function() {
+      renderEstimatesTable();
+    };
+    // Editar estimate
+    window.openEstimateModal = function(id) {
+      const est = estimatesData.find(e => e.id === id);
+      let modal = document.getElementById('estimate-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'estimate-modal';
+        modal.tabIndex = -1;
+        modal.innerHTML = `
+        <div class="modal-dialog">
+          <form class="modal-content" id="estimate-form">
+            <div class="modal-header"><h5 class="modal-title">Edit Estimate</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+              <div class="mb-2"><label class="form-label">Name</label><input required name="name" class="form-control"></div>
+              <div class="mb-2"><label class="form-label">Branch</label><select required name="branch_id" class="form-select"></select></div>
+              <div class="mb-2"><label class="form-label">Salesperson</label><select required name="salesperson_id" class="form-select"></select></div>
+              <div class="mb-2"><label class="form-label">Status</label><select required name="status_id" class="form-select"></select></div>
+              <div class="mb-2"><label class="form-label">Created Date</label><input required name="created_date" type="date" class="form-control"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+          </form>
+        </div>`;
+        document.body.appendChild(modal);
+      }
+      const form = modal.querySelector('form');
+      form.name.value = est?.name || '';
+      form.branch_id.innerHTML = estimatesBranches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+      form.branch_id.value = est?.branch_id || estimatesBranches[0]?.id || '';
+      form.salesperson_id.innerHTML = estimatesSalespersons.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      form.salesperson_id.value = est?.salesperson_id || estimatesSalespersons[0]?.id || '';
+      form.status_id.innerHTML = estimatesStatuses.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      form.status_id.value = est?.status_id || estimatesStatuses[0]?.id || '';
+      form.created_date.value = est?.created_date ? est.created_date.split('T')[0] : '';
+      form.onsubmit = async function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(form));
+        try {
+          await axios.put(`/api/crud/estimate/${est.id}`, data);
+          showToast('Estimate updated!');
+          bootstrap.Modal.getOrCreateInstance(modal).hide();
+          loadEstimates();
+        } catch (err) {
+          showToast(err.response?.data?.error || err.message, 'danger');
+        }
+      };
+      bootstrap.Modal.getOrCreateInstance(modal).show();
+    };
+    // Eliminar estimate
+    window.deleteEstimate = async function(id) {
+      if (!confirm('Delete this estimate?')) return;
+      try {
+        await axios.delete(`/api/crud/estimate/${id}`);
+        showToast('Estimate deleted!');
+        loadEstimates();
+      } catch (err) {
+        showToast(err.response?.data?.error || err.message, 'danger');
+      }
+    };
+
+    // --- CRUD SALESPERSONS ---
+    let salespersonsData = [], salespersonsBranches = [];
+    async function loadSalespersonsFilters() {
+      // Cargar branches para el filtro
+      salespersonsBranches = await axios.get('/api/crud/branch').then(r => r.data);
+      const branchSel = document.getElementById('filter-salesperson-branch');
+      branchSel.innerHTML = '<option value="">All</option>' + salespersonsBranches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    }
+    async function loadSalespersons() {
+      await loadSalespersonsFilters();
+      const res = await axios.get('/api/crud/salesperson/with-active-jobs');
+      salespersonsData = res.data;
+      renderSalespersonsTable();
+    }
+    function renderSalespersonsTable() {
+      const tbody = document.querySelector('#salespersons-table tbody');
+      tbody.innerHTML = '';
+      // Aplicar filtros en frontend
+      const branch = document.getElementById('filter-salesperson-branch').value;
+      const minWarnings = parseInt(document.getElementById('filter-salesperson-warnings').value) || 0;
+      const minActiveJobs = parseInt(document.getElementById('filter-salesperson-activejobs').value) || 0;
+      let filtered = salespersonsData.filter(sp => {
+        let ok = true;
+        if (branch && String(sp.branch_id) !== branch) ok = false;
+        if (sp.warning_count < minWarnings) ok = false;
+        if (sp.active_jobs < minActiveJobs) ok = false;
+        return ok;
+      });
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No salespersons found</td></tr>';
+        return;
+      }
+      filtered.forEach(sp => {
+        tbody.innerHTML += `<tr>
+          <td>${sp.id}</td><td>${sp.name}</td><td>${sp.telegramid || ''}</td><td>${sp.warning_count || 0}</td><td>${sp.active_jobs || 0}</td>
+          <td class='action-btns'>
+            <button class='btn btn-sm btn-primary' onclick='openSalespersonModal(${JSON.stringify(sp)})'><i class="bi bi-pencil"></i></button>
+            <button class='btn btn-sm btn-danger' onclick='deleteSalesperson(${sp.id})'><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>`;
+      });
+    }
+    document.getElementById('apply-salesperson-filters').onclick = function() {
+      renderSalespersonsTable();
+    };
+    document.getElementById('add-salesperson-btn').onclick = function() { openSalespersonModal(); };
+    window.openSalespersonModal = function(sp = null) {
+      let modal = document.getElementById('salesperson-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'salesperson-modal';
+        modal.tabIndex = -1;
+        modal.innerHTML = `
+        <div class="modal-dialog">
+          <form class="modal-content" id="salesperson-form">
+            <div class="modal-header"><h5 class="modal-title">Salesperson</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+              <div class="mb-2"><label class="form-label">Name</label><input required name="name" class="form-control"></div>
+              <div class="mb-2"><label class="form-label">Telegram ID</label><input name="telegramid" class="form-control"></div>
+              <div class="mb-2"><label class="form-label">Warning Count</label><input name="warning_count" type="number" min="0" class="form-control"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+          </form>
+        </div>`;
+        document.body.appendChild(modal);
+      }
+      const form = modal.querySelector('form');
+      form.name.value = sp?.name || '';
+      form.telegramid.value = sp?.telegramid || '';
+      form.warning_count.value = sp?.warning_count || 0;
+      form.onsubmit = async function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(form));
+        try {
+          if (sp?.id) await axios.put(`/api/crud/salesperson/${sp.id}`, data);
+          else await axios.post('/api/crud/salesperson', data);
+          showToast('Salesperson saved!');
+          bootstrap.Modal.getOrCreateInstance(modal).hide();
+          loadSalespersons();
+        } catch (err) {
+          showToast(err.response?.data?.error || err.message, 'danger');
+        }
+      };
+      bootstrap.Modal.getOrCreateInstance(modal).show();
+    };
+    window.deleteSalesperson = async function(id) {
+      if (!confirm('Delete this salesperson?')) return;
+      try {
+        await axios.delete(`/api/crud/salesperson/${id}`);
+        showToast('Salesperson deleted!');
+        loadSalespersons();
+      } catch (err) {
+        showToast(err.response?.data?.error || err.message, 'danger');
+      }
+    };
+
+    // --- CRUD BRANCHES ---
+    async function loadBranches() {
+      const res = await axios.get('/api/crud/branch');
+      const tbody = document.querySelector('#branches-table tbody');
+      tbody.innerHTML = '';
+      res.data.forEach(br => {
+        tbody.innerHTML += `<tr>
+          <td>${br.id}</td><td>${br.name}</td>
+          <td class='action-btns'>
+            <button class='btn btn-sm btn-primary' onclick='openBranchModal(${JSON.stringify(br)})'><i class="bi bi-pencil"></i></button>
+            <button class='btn btn-sm btn-danger' onclick='deleteBranch(${br.id})'><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>`;
+      });
+    }
+    document.getElementById('add-branch-btn').onclick = function() { openBranchModal(); };
+    window.openBranchModal = function(br = null) {
+      let modal = document.getElementById('branch-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'branch-modal';
+        modal.tabIndex = -1;
+        modal.innerHTML = `
+        <div class="modal-dialog">
+          <form class="modal-content" id="branch-form">
+            <div class="modal-header"><h5 class="modal-title">Branch</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+              <div class="mb-2"><label class="form-label">Name</label><input required name="name" class="form-control"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+          </form>
+        </div>`;
+        document.body.appendChild(modal);
+      }
+      const form = modal.querySelector('form');
+      form.name.value = br?.name || '';
+      form.onsubmit = async function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(form));
+        try {
+          if (br?.id) await axios.put(`/api/crud/branch/${br.id}`, data);
+          else await axios.post('/api/crud/branch', data);
+          showToast('Branch saved!');
+          bootstrap.Modal.getOrCreateInstance(modal).hide();
+          loadBranches();
+        } catch (err) {
+          showToast(err.response?.data?.error || err.message, 'danger');
+        }
+      };
+      bootstrap.Modal.getOrCreateInstance(modal).show();
+    };
+    window.deleteBranch = async function(id) {
+      if (!confirm('Delete this branch?')) return;
+      try {
+        await axios.delete(`/api/crud/branch/${id}`);
+        showToast('Branch deleted!');
+        loadBranches();
+      } catch (err) {
+        showToast(err.response?.data?.error || err.message, 'danger');
+      }
+    };
+
+    // --- CRUD STATUSES ---
+    async function loadStatuses() {
+      const res = await axios.get('/api/crud/status');
+      const tbody = document.querySelector('#statuses-table tbody');
+      tbody.innerHTML = '';
+      res.data.forEach(st => {
+        tbody.innerHTML += `<tr>
+          <td>${st.id}</td><td>${st.name}</td>
+          <td class='action-btns'>
+            <button class='btn btn-sm btn-primary' onclick='openStatusModal(${JSON.stringify(st)})'><i class="bi bi-pencil"></i></button>
+            <button class='btn btn-sm btn-danger' onclick='deleteStatus(${st.id})'><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>`;
+      });
+    }
+    document.getElementById('add-status-btn').onclick = function() { openStatusModal(); };
+    window.openStatusModal = function(st = null) {
+      let modal = document.getElementById('status-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'status-modal';
+        modal.tabIndex = -1;
+        modal.innerHTML = `
+        <div class="modal-dialog">
+          <form class="modal-content" id="status-form">
+            <div class="modal-header"><h5 class="modal-title">Status</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+              <div class="mb-2"><label class="form-label">Name</label><input required name="name" class="form-control"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+          </form>
+        </div>`;
+        document.body.appendChild(modal);
+      }
+      const form = modal.querySelector('form');
+      form.name.value = st?.name || '';
+      form.onsubmit = async function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(form));
+        try {
+          if (st?.id) await axios.put(`/api/crud/status/${st.id}`, data);
+          else await axios.post('/api/crud/status', data);
+          showToast('Status saved!');
+          bootstrap.Modal.getOrCreateInstance(modal).hide();
+          loadStatuses();
+        } catch (err) {
+          showToast(err.response?.data?.error || err.message, 'danger');
+        }
+      };
+      bootstrap.Modal.getOrCreateInstance(modal).show();
+    };
+    window.deleteStatus = async function(id) {
+      if (!confirm('Delete this status?')) return;
+      try {
+        await axios.delete(`/api/crud/status/${id}`);
+        showToast('Status deleted!');
+        loadStatuses();
+      } catch (err) {
+        showToast(err.response?.data?.error || err.message, 'danger');
+      }
+    };
+
+    // Sync
+    document.getElementById('sync-btn').onclick = async function() {
+      document.getElementById('sync-log').textContent = 'Running sync...';
+      try {
+        const res = await axios.post('/api/sync-estimates', { apiKey: prompt('Enter API Key:') });
+        document.getElementById('sync-log').textContent = JSON.stringify(res.data, null, 2);
+      } catch (err) {
+        document.getElementById('sync-log').textContent = err.response?.data?.error || err.message;
+      }
+    };
+
+    // Warnings
+    document.getElementById('warnings-btn').onclick = async function() {
+      document.getElementById('warnings-log').textContent = 'Sending warnings...';
+      try {
+        const res = await axios.post('/api/send-warnings');
+        document.getElementById('warnings-log').textContent = JSON.stringify(res.data, null, 2);
+      } catch (err) {
+        document.getElementById('warnings-log').textContent = err.response?.data?.error || err.message;
+      }
+    };
+
+    // Al cargar la página, dejar los filtros de fecha vacíos
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('filter-from').value = '';
+      document.getElementById('filter-to').value = '';
+    });
+  </script>
+</body>
+</html> 

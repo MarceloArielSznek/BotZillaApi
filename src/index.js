@@ -16,6 +16,9 @@ app.get('/', (req, res) => {
 const estimatesRoutes = require('./routes/estimates');
 app.use('/api', estimatesRoutes);
 
+const crudRoutes = require('./routes/crud');
+app.use('/api/crud', crudRoutes);
+
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en el puerto ${PORT}`);
 });
