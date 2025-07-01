@@ -86,9 +86,14 @@ async function fetchAllEstimates(apiKey, fechaInicio, fechaFin) {
   return allLeads;
 }
 
+function logWithTimestamp(message) {
+  console.log(`[${new Date().toISOString()}] ${message}`);
+}
+
 // --- NUEVO ENDPOINT PARA SINCRONIZAR Y GUARDAR EN LA BASE ---
 exports.syncEstimates = async (req, res) => {
   const { apiKey } = req.body;
+  logWithTimestamp('syncEstimates called');
   // Calcular fechas: últimas 2 semanas
   const fechaFin = new Date();
   const fechaInicio = new Date();
@@ -179,6 +184,7 @@ exports.syncEstimates = async (req, res) => {
     ]);
     await client.query('COMMIT');
     console.log('--- SYNC FINALIZADO ---');
+    logWithTimestamp(`syncEstimates finished: ${inserted} inserted, ${updated} updated, ${salesPersons} salespersons, ${branches} branches, ${statuses} statuses`);
     res.json({
       inserted, updated, salesPersons, branches, statuses, total: estimates.length, errors
     });
@@ -216,6 +222,7 @@ async function sendTelegram(telegramid, message) {
 
 // Endpoint para enviar advertencias
 exports.sendWarnings = async (req, res) => {
+  logWithTimestamp('sendWarnings called');
   const client = await dbPool.connect();
   const managerTelegramId = 'MANAGER_TELEGRAM_ID'; // Replace with the real one or fetch from DB
   try {
@@ -263,6 +270,7 @@ exports.sendWarnings = async (req, res) => {
         notify_manager
       });
     }
+    logWithTimestamp(`sendWarnings finished: ${warnings.length} warnings sent`);
     res.json(warnings);
   } catch (error) {
     console.error('Error in sendWarnings:', error.message);
@@ -274,6 +282,7 @@ exports.sendWarnings = async (req, res) => {
 
 exports.registerTelegram = async (req, res) => {
   const { telegram_id, salesperson_id } = req.body;
+  logWithTimestamp(`registerTelegram called: salesperson_id=${salesperson_id}, telegram_id=${telegram_id}`);
   const client = await dbPool.connect();
   try {
     if (!salesperson_id || !telegram_id) {
@@ -287,6 +296,7 @@ exports.registerTelegram = async (req, res) => {
     const sp = spRes.rows[0];
     await client.query('UPDATE salesperson SET telegramid = $1 WHERE id = $2', [telegram_id, sp.id]);
     res.json({ message: `Telegram ID registered for ${sp.name}.` });
+    logWithTimestamp(`registerTelegram finished: ${sp.name} registered with telegram_id=${telegram_id}`);
   } catch (error) {
     console.error('Error in registerTelegram:', error.message);
     res.status(500).json({ error: error.message });
@@ -296,10 +306,12 @@ exports.registerTelegram = async (req, res) => {
 };
 
 exports.getSalespersonsList = async (req, res) => {
+  logWithTimestamp('getSalespersonsList called');
   const client = await dbPool.connect();
   try {
     const all = await client.query('SELECT id, name FROM salesperson ORDER BY id');
     res.json(all.rows);
+    logWithTimestamp(`getSalespersonsList finished: returned ${all.rows.length} salespersons`);
   } catch (error) {
     console.error('Error in getSalespersonsList:', error.message);
     res.status(500).json({ error: error.message });
@@ -310,6 +322,7 @@ exports.getSalespersonsList = async (req, res) => {
 
 exports.checkTelegram = async (req, res) => {
   const { telegram_id } = req.body;
+  logWithTimestamp(`checkTelegram called: telegram_id=${telegram_id}`);
   if (!telegram_id) {
     return res.status(400).json({ error: 'telegram_id is required.' });
   }
@@ -317,6 +330,7 @@ exports.checkTelegram = async (req, res) => {
   try {
     const result = await client.query('SELECT 1 FROM salesperson WHERE telegramid = $1 LIMIT 1', [telegram_id]);
     res.json({ exists: result.rows.length > 0 });
+    logWithTimestamp(`checkTelegram finished: exists=${result.rows.length > 0}`);
   } catch (error) {
     console.error('Error in checkTelegram:', error.message);
     res.status(500).json({ error: error.message });
