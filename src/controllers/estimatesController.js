@@ -95,7 +95,7 @@ exports.syncEstimates = async (req, res) => {
   const { apiKey } = req.body;
   logWithTimestamp('syncEstimates called');
   // Hardcodear fecha de inicio del sync a 2024-06-15
-  const fechaInicioStr = '2024-06-15';
+  const fechaInicioStr = '2025-06-15';
   const fechaFinStr = new Date().toISOString().slice(0, 10); // hoy
 
   if (!apiKey) {
