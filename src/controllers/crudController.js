@@ -177,8 +177,8 @@ exports.getSalespersonsWithWarningsForManager = async (req, res) => {
       ) AS active_jobs
     FROM salesperson s
     LEFT JOIN branch b ON s.branch_id = b.id
-    WHERE s.warning_count > 3
-    ORDER BY s.warning_count DESC, s.name
+    WHERE s.warning_count >= 2
+    ORDER BY branch_name
   `);
   res.json(result);
 }; 

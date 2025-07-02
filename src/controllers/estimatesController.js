@@ -247,12 +247,9 @@ exports.sendWarnings = async (req, res) => {
       if (total_estimates >= 12) {
         new_warning_count++;
         if (new_warning_count === 1) {
-          warning_message = `Hey! Just a heads-up — you currently have ${total_estimates} leads in 'In Progress' or 'Released' status. Nothing serious yet, but try to keep it under 12 if possible. You're still good 😉`;
-        } else if (new_warning_count === 2) {
-          warning_message = `Second friendly reminder 😅 You're still at ${total_estimates} active leads. I really don’t want to be a snitch… but I was literally programmed to warn you twice before taking it further 🤖`;
-        } else if (new_warning_count >= 3) {
-          warning_message = `Okay... here we are 😬 You're still at ${total_estimates} leads in 'In Progress' or 'Released'. As part of the system rules, I now have to notify your manager.
-          This isn't personal — I send this to anyone who stays over the limit for multiple days. I’m just the messenger 🤖📩`;
+          warning_message = `⚠️ URGENT: You have ${total_estimates} active leads ('In Progress' or 'Released'). You MUST reduce this number below 12 IMMEDIATELY or you will be reported to management.`;
+        } else if (new_warning_count >= 2) {
+          warning_message = `FINAL WARNING: You still have ${total_estimates} active leads. Management is being notified. Immediate action is required.`;
           notify_manager = true;
         }
         await client.query('UPDATE salesperson SET warning_count = $1 WHERE id = $2', [new_warning_count, sp.id]);
