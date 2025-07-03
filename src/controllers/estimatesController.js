@@ -143,8 +143,6 @@ exports.syncEstimates = async (req, res) => {
           console.log(`Nuevo salesperson: ${est.sales_person}`);
         } else {
           spId = spMap.get(est.sales_person);
-          // Actualizar branch_id del salesperson existente
-          await client.query('UPDATE salesperson SET branch_id = $1 WHERE id = $2', [brId, spId]);
         }
       }
       let stId = null;
@@ -230,6 +228,7 @@ exports.sendWarnings = async (req, res) => {
   logWithTimestamp('sendWarnings called');
   const client = await dbPool.connect();
   const managerTelegramId = 'MANAGER_TELEGRAM_ID'; // Replace with the real one or fetch from DB
+  let felicitar = [];
   try {
     const salespersonsRes = await client.query('SELECT id, name, telegramid, warning_count FROM salesperson');
     let warnings = [];
@@ -247,7 +246,7 @@ exports.sendWarnings = async (req, res) => {
       if (total_estimates >= 12) {
         new_warning_count++;
         if (new_warning_count === 1) {
-          warning_message = `⚠️ URGENT: You have ${total_estimates} active leads ('In Progress' or 'Released'). You MUST reduce this number below 12 IMMEDIATELY or you will be reported to management.`;
+          warning_message = `⚠️ URGENT: You have ${total_estimates} active leads ('In Progress' or 'Released'). You MUST reduce this number below 12. Please take action IMMEDIATELY .`;
         } else if (new_warning_count >= 2) {
           warning_message = `FINAL WARNING: You still have ${total_estimates} active leads. Management is being notified. Immediate action is required.`;
           notify_manager = true;
@@ -256,6 +255,9 @@ exports.sendWarnings = async (req, res) => {
       } else {
         if (sp.warning_count !== 0) {
           await client.query('UPDATE salesperson SET warning_count = 0 WHERE id = $1', [sp.id]);
+          if (sp.telegramid) {
+            felicitar.push(sp.telegramid);
+          }
         }
         continue;
       }
@@ -272,6 +274,13 @@ exports.sendWarnings = async (req, res) => {
         warning_count: new_warning_count,
         notify_manager
       });
+    }
+    // Enviar felicitaciones después del escaneo
+    for (const telegramid of felicitar) {
+      await sendTelegram(
+        telegramid,
+        "🎉 Congratulations! You have reduced your active leads to less than 12. Thank you for your effort and commitment!"
+      );
     }
     logWithTimestamp(`sendWarnings finished: ${warnings.length} warnings sent`);
     res.json(warnings);
