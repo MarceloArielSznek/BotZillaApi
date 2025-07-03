@@ -256,7 +256,7 @@ exports.sendWarnings = async (req, res) => {
         if (sp.warning_count !== 0) {
           await client.query('UPDATE salesperson SET warning_count = 0 WHERE id = $1', [sp.id]);
           if (sp.telegramid) {
-            felicitar.push(sp.telegramid);
+            felicitar.push({ telegramid: sp.telegramid, name: sp.name });
           }
         }
         continue;
@@ -276,14 +276,20 @@ exports.sendWarnings = async (req, res) => {
       });
     }
     // Enviar felicitaciones después del escaneo
-    for (const telegramid of felicitar) {
+    let felicitaciones = [];
+    for (const f of felicitar) {
       await sendTelegram(
-        telegramid,
+        f.telegramid,
         "🎉 Congratulations! You have reduced your active leads to less than 12. Thank you for your effort and commitment!"
       );
+      felicitaciones.push({
+        salesperson_name: f.name,
+        telegram_id: f.telegramid,
+        message: "🎉 Congratulations! You have reduced your active leads to less than 12. Thank you for your effort and commitment!"
+      });
     }
     logWithTimestamp(`sendWarnings finished: ${warnings.length} warnings sent`);
-    res.json(warnings);
+    res.json({ warnings, felicitaciones });
   } catch (error) {
     console.error('Error in sendWarnings:', error.message);
     res.status(500).json({ error: error.message });
