@@ -230,7 +230,7 @@ exports.sendWarnings = async (req, res) => {
   const managerTelegramId = 'MANAGER_TELEGRAM_ID'; // Replace with the real one or fetch from DB
   let felicitar = [];
   try {
-    const salespersonsRes = await client.query('SELECT id, name, telegramid, warning_count FROM salesperson');
+    const salespersonsRes = await client.query('SELECT id, name, telegramid, warning_count FROM salesperson WHERE telegramid IS NOT NULL');
     let warnings = [];
     for (const sp of salespersonsRes.rows) {
       const countRes = await client.query(
@@ -246,44 +246,41 @@ exports.sendWarnings = async (req, res) => {
       if (total_estimates >= 12) {
         new_warning_count++;
         if (new_warning_count === 1) {
-          warning_message = `⚠️ URGENT: You have ${total_estimates} active leads ('In Progress' or 'Released'). You MUST reduce this number below 12. Please take action IMMEDIATELY .`;
+          warning_message = `⚠️ URGENT: You have ${total_estimates} active leads ('In Progress' or 'Released'). You MUST reduce this number below 12 IMMEDIATELY or you will be reported to management.`;
         } else if (new_warning_count >= 2) {
           warning_message = `FINAL WARNING: You still have ${total_estimates} active leads. Management is being notified. Immediate action is required.`;
           notify_manager = true;
         }
         await client.query('UPDATE salesperson SET warning_count = $1 WHERE id = $2', [new_warning_count, sp.id]);
+        if (sp.telegramid && warning_message) {
+          await sendTelegram(sp.telegramid, warning_message);
+        }
+        if (notify_manager && managerTelegramId) {
+          await sendTelegram(managerTelegramId, `Salesperson ${sp.name} has received more than two warnings for having too many active leads.`);
+        }
+        warnings.push({
+          salesperson_name: sp.name,
+          telegram_id: sp.telegramid,
+          warning_message,
+          warning_count: new_warning_count,
+          notify_manager
+        });
       } else {
         if (sp.warning_count !== 0) {
           await client.query('UPDATE salesperson SET warning_count = 0 WHERE id = $1', [sp.id]);
+          const congratsMsg = "🎉 Congratulations! You have reduced your active leads to less than 12. Thank you for your effort and commitment!";
           if (sp.telegramid) {
-            await sendTelegram(
-              sp.telegramid,
-              "🎉 Congratulations! You have reduced your active leads to less than 12. Thank you for your effort and commitment!"
-            );
+            await sendTelegram(sp.telegramid, congratsMsg);
           }
           warnings.push({
             salesperson_name: sp.name,
             telegram_id: sp.telegramid,
-            warning_message: "🎉 Congratulations! You have reduced your active leads to less than 12. Thank you for your effort and commitment!",
+            warning_message: congratsMsg,
             warning_count: 0,
             notify_manager: false
           });
         }
-        continue;
       }
-      if (sp.telegramid && warning_message) {
-        await sendTelegram(sp.telegramid, warning_message);
-      }
-      if (notify_manager && managerTelegramId) {
-        await sendTelegram(managerTelegramId, `Salesperson ${sp.name} has received more than two warnings for having too many active leads.`);
-      }
-      warnings.push({
-        salesperson_name: sp.name,
-        telegram_id: sp.telegramid,
-        warning_message,
-        warning_count: new_warning_count,
-        notify_manager
-      });
     }
     // Enviar felicitaciones después del escaneo
     for (const telegramid of felicitar) {
